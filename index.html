@@ -36,16 +36,13 @@
                 </table>
                 <div id="dateInput">
                     Date: <input type="date" v-model="startTime" />
-                    <button @click="fetchVehicle" class="pointer">GO</button>
+                    <button @click="fetchVehicle" class="pointer">GO</button><span v-if="loadingVehicle"> Loading...</span>
                     <div v-if="errorVehicles > ''"> {{errorVehicles}} </div>
                 </div>
                 <table id="data" class="full-width">
                     <tr v-for="fieldName in overViewFields.fieldsToShow" :key="fieldName">
                         <td>{{overViewFields[fieldName].label}}</td>
                         <td>{{overViewFields[fieldName].value}} {{overViewFields[fieldName].unitLabel}}</td>
-                    </tr>
-                    <tr v-if="loadingVehicle">
-                        <td colspan="2">Loading...</td>
                     </tr>
                 </table>
             </div>
