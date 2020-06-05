@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCIzx5nymua22-b-KoOJ0nS1-zFpQh3dQI"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <title>Fleet management</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+    <div id="app">
+        <div id="keyInput">
+            API key: <input type="text" v-model="apiKey" />
+            <button @click="fetchOverview" class="pointer">GO</button>
+            <span class="errorVehicles-message">{{errorVehicles}}</span>
+        </div>
+        <div id="dataVisualization">
+            <div id="tables">
+                <table id="vehicles"  class="full-width">
+                    <tr>
+                        <th>Name</th>
+                        <th class="text-right">Speed</th>
+                        <th class="text-right">Last update</th>
+                    </tr>
+                    <tr v-if="vehicles.length === 0">
+                        <td colspan="3" class="text-center">{{loadingVehicles?'Loading':'No data available'}}</td>
+                    </tr>
+                    <tr v-for="vehicle in vehicles" :key="vehicle.objectId" :class="{pointer : true, active: vehicle.objectId === vehicleID}" @click="vehicleID = vehicle.objectId">
+                        <td>{{vehicle.plate}}</td>
+                        <td class="text-right">{{typeof vehicle.speed === 'number' ? vehicle.speed + ' km/h' : 'N/A'}}</td>
+                        <td class="text-right">{{getFromNow(vehicle.timestamp)}}</td>
+                    </tr>
+                </table>
+                <div id="dateInput">
+                    Date: <input type="date" v-model="startTime" />
+                    <button @click="fetchVehicle" class="pointer">GO</button>
+                    <div v-if="errorVehicles > ''"> {{errorVehicles}} </div>
+                </div>
+                <table id="data" class="full-width">
+                    <tr v-for="fieldName in overViewFields.fieldsToShow" :key="fieldName">
+                        <td>{{overViewFields[fieldName].label}}</td>
+                        <td>{{overViewFields[fieldName].value}} {{overViewFields[fieldName].unitLabel}}</td>
+                    </tr>
+                    <tr v-if="loadingVehicle">
+                        <td colspan="2">Loading...</td>
+                    </tr>
+                </table>
+            </div>
+            <div id="map">
+
+            </div>
+        </div>   
+    </div>
+
+<script>
+new Vue({
+  el: '#app',
+  data: function(){ 
+    return{
+        apiKey: 'home.assignment-699172',
+        vehicles: [],
+        daysEvents: [],
+        errorVehicles: '',
+        errorVehicle: '',
+        loadingVehicles: false,
+        loadingVehicle: false,
+        vehicleID: null,
+        startTime: moment().format("YYYY-MM-DD"),
+        endTime: null,
+        apiBaseUrl: 'https://app.ecofleet.com/seeme/Api/Vehicles',
+        overViewFields: {
+            fieldsToShow: ['distance', 'stops', 'shortestDistance'],
+            distance: {
+                label: "Total distance",
+                value: 0,
+                unitLabel: 'km',
+                path: [],
+                mapPath: null
+            },
+            stops: {
+                label: "Number of stops",
+                value: 0,
+                startLocation: null,
+                endLocation: null,
+                positions: [],
+                markers: []
+            },
+            shortestDistance: {
+                label: "Shortest possible distance",
+                value: 0,
+                unitLabel: 'km'
+            },
+            reset: function() {
+                this.shortestDistance.value = 0;
+                this.stops.value = 0;
+                this.stops.positions = [];
+                this.distance.value = 0;
+                this.distance.path = [];
+                if(this.distance.mapPath){
+                    this.distance.mapPath.setMap(null);
+                    this.distance.mapPath = null;
+                }
+                if(this.stops.markers.length > 0){
+                    console.log("clearing markers")
+                    this.stops.markers.forEach(marker => {
+                        marker.setMap(null);
+                    });
+                    this.stops.markers = [];
+                }
+            }
+        },
+        map: null,
+        matrix: new google.maps.DistanceMatrixService()
+    }
+  },
+  methods: {
+        selectVehicle: function(){
+
+        },
+        fetchOverview: function(){
+            this.$data.overViewFields.reset();
+            this.$data.errorVehicles = '';
+            this.$data.loadingVehicles = true;
+            const apiUrl = `${this.$data.apiBaseUrl}/getLastData?key=${this.$data.apiKey}&json`;
+            if(this.$data.apiKey === '') return this.$data.errorVehicles = "API key is required";
+            const that = this;
+            fetch(apiUrl)
+            .then(res => res.json())
+            .then(json => {
+                that.clearVehicleMarkers();
+                that.$data.vehicles = json.response.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                that.$data.vehicles.forEach(vehicle => {
+                    vehicle.marker = new google.maps.Marker({
+                        position: {
+                            lat: vehicle.latitude,
+                            lng: vehicle.longitude
+                        },
+                        title: vehicle.plate
+                    });
+                    vehicle.marker.setMap(that.$data.map);
+                });
+                this.$data.loadingVehicles = false;
+            }).catch(err => {
+                that.$data.errorVehicles = 'Failed to load vehicles';
+                console.log(err);
+                this.$data.loadingVehicles = false;
+            });
+        },
+        fetchVehicle: function(){
+            this.$data.loadingVehicle = true;
+            if(this.$data.startTime){
+                this.$data.endTime = moment(this.$data.startTime, "YYYY-MM-DD").add(1, 'day').format("YYYY-MM-DD");
+            } 
+            const apiUrl = `${this.$data.apiBaseUrl}/getRawData?objectId=${this.$data.vehicleID}&begTimestamp=${this.$data.startTime}&endTimestamp=${this.$data.endTime}&key=${this.$data.apiKey}&json`;
+            const that = this;
+            this.$data.overViewFields.reset();
+            this.clearVehicleMarkers();
+            fetch(apiUrl).then(res => res.json())
+            .then(json => {
+                let previousItem = null;
+                let odometer = null;
+
+                const addStop = function(item, increment){
+                    that.$data.overViewFields.stops.positions.push({ lat: item.Latitude, lng: item.Longitude});
+                    if(increment) that.$data.overViewFields.stops.value++;
+                }
+
+                for(const [index, item] of Object.entries(json.response)){
+                    if(!previousItem){
+                        previousItem = item;
+                        odometer = item.Distance;
+                        console.log("start:", odometer);
+                        addStop(item);// we add starting position so we can calulate shortest route later
+                        continue; 
+                    } 
+                    if(previousItem.EngineStatus && !item.EngineStatus) addStop(item, true); // we add stop naively when engine is turned off
+                    if(previousItem.Longitude !== item.Longitude || previousItem.Latitude !== item.Latitude){
+                        that.$data.overViewFields.distance.path.push({ lat: item.Latitude, lng: item.Longitude});
+                    }
+                    previousItem = item;
+                    if(parseInt(index) + 1 === json.response.length) {
+                        addStop(item) // we add ending position so we can calulate shortest route later
+                        if(odometer && item.Distance){
+                            that.$data.overViewFields.distance.value = (item.Distance - odometer).toFixed(2); 
+                            console.log("end:", odometer);
+                        } 
+                    }
+                }
+                that.createPathAndMarkers();
+                this.getShortestDistance();
+                that.$data.loadingVehicle = false;
+            }).catch(err => {
+                console.log(err);
+                that.$data.loadingVehicle = false;
+            });
+        },
+        getFromNow: function(date){
+            return moment(date).fromNow();
+        },
+        getShortestDistance: async function(){
+            const distance = -1;
+            const stops = this.$data.overViewFields.stops.positions;
+            const promises = [];
+
+            if(stops.length < 2) return console.log("Not enough stops to calculate distance");
+
+            for(let i = 0; i < stops.length - 1; i++){
+                promises.push(this.getDistance(stops[i], stops[i+1]));
+            }
+
+            const distances = await Promise.all(promises);
+
+            this.$data.overViewFields.shortestDistance.value = (distances.reduce((a,b) => a+b) / 1000).toFixed(2);
+        },
+        clearVehicleMarkers: function(){
+            this.$data.vehicles.forEach(vehicle => {
+                if(vehicle.marker) {
+                    vehicle.marker.setMap(null);
+                    vehicle.marker = null;
+                }
+            });
+        },
+        createPathAndMarkers: function(origins, destinations){
+            const that = this;
+            const stops = this.$data.overViewFields.stops;
+            this.$data.overViewFields.distance.mapPath = new google.maps.Polyline({
+                path: that.$data.overViewFields.distance.path,
+                geodesic: true,
+                strokeColor: '#FF0000',
+                strokeOpacity: 1.0,
+                strokeWeight: 2
+            });
+            this.$data.overViewFields.distance.mapPath.setMap(that.$data.map);
+            let index = 0;
+            this.$data.overViewFields.stops.positions.forEach(stop => {
+                let marker = new google.maps.Marker({
+                    position: {
+                        lat: stop.lat,
+                        lng: stop.lng
+                    },
+                    title: (++index).toString()
+                });
+                that.$data.overViewFields.stops.markers.push(marker);
+                marker.setMap(that.$data.map);
+            });
+        },
+        getDistance: async function(start, end){
+            return new Promise((resolve, reject) => {
+                let shortestDistance = -1;
+                this.$data.matrix.getDistanceMatrix({
+                    origins: [start],
+                    destinations: [end],
+                    travelMode: 'DRIVING',
+                }, function(data) {
+                    console.log(data)
+                    data.rows.forEach(row => {
+                        let distance = 0;
+                        row.elements.forEach(el => {
+                            distance += el.distance.value;
+                        });
+                        if(shortestDistance === -1 || distance < shortestDistance) shortestDistance = distance;
+                    });
+                    resolve(shortestDistance)
+                });
+            });
+        }
+  },
+  mounted(){
+    this.$data.map = new google.maps.Map(document.getElementById('map'), {
+        center: {lat: 58.3749473, lng: 26.6975258 },
+        zoom: 8
+    });
+  }
+})
+</script>
+</body>
+</html>
