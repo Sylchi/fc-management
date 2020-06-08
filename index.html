@@ -182,7 +182,6 @@ new Vue({
                     if(!previousItem){
                         previousItem = item;
                         odometer = item.Distance;
-                        console.log("start:", odometer);
                         addStop(item);// we add starting position so we can calulate shortest route later
                         continue; 
                     }
@@ -199,8 +198,9 @@ new Vue({
                         addStop(item) // we add ending position so we can calulate shortest route later
                         if(odometer && item.Distance){
                             that.$data.overViewFields.distance.value = (item.Distance - odometer).toFixed(2); 
-                            console.log("end:", odometer);
-                        } 
+                        } else {
+                            that.$data.overViewFields.distance.value = "N/A";
+                        }
                     }
                 }
                 that.createPathAndMarkers();
@@ -229,7 +229,7 @@ new Vue({
             const result = await this.getDistances(origins, destinations);
 
             if(!result || !result.rows) return this.$data.overViewFields.shortestDistance.value = "N/A";
-            
+
             let shortestDistanceByFollowingRoute = 0;
             result.rows.forEach(row => {
                 shortestDistanceByFollowingRoute += row.elements[0].distance.value;
