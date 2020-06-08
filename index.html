@@ -227,6 +227,9 @@ new Vue({
             if(stops.length < 2) return this.$data.overViewFields.shortestDistance.value = "N/A";
 
             const result = await this.getDistances(origins, destinations);
+
+            if(!result || !result.rows) return this.$data.overViewFields.shortestDistance.value = "N/A";
+            
             let shortestDistanceByFollowingRoute = 0;
             result.rows.forEach(row => {
                 shortestDistanceByFollowingRoute += row.elements[0].distance.value;
@@ -279,10 +282,13 @@ new Vue({
         }
   },
   mounted(){
-    this.$data.map = new google.maps.Map(document.getElementById('map'), {
-        center: {lat: 58.3749473, lng: 26.6975258 },
-        zoom: 8
-    });
+    this.$nextTick(() => {
+        this.$data.map = new google.maps.Map(document.getElementById('map'), {
+            center: {lat: 58.3749473, lng: 26.6975258 },
+            zoom: 8
+        });
+	});
+
   }
 })
 </script>
