@@ -13,41 +13,62 @@
 
     <div id="app">
         <div id="keyInput">
-            API key: <input type="text" v-model="apiKey" />
-            <button @click="fetchOverview" class="pointer">GO</button>
-            <span class="errorVehicles-message">{{errorVehicles}}</span>
+            <div style="max-width: calc(40% - 10px);" class="flex-end user-input">
+                <span>API key:</span>
+                <input type="text" v-model="apiKey" class="full-width"  placeholder="Enter your API key and press GO" />
+                <button 
+                    @click="fetchOverview" 
+                    class="pointer"
+                    :disabled="apiKey === ''"
+                >GO</button>
+            </div>
         </div>
         <div id="dataVisualization">
             <div id="tables">
-                <table id="vehicles"  class="full-width">
+                <table id="vehicles" class="full-width">
                     <tr>
                         <th>Name</th>
                         <th class="text-right">Speed</th>
                         <th class="text-right">Last update</th>
                     </tr>
-                    <tr v-if="vehicles.length === 0">
-                        <td colspan="3" class="text-center">{{loadingVehicles?'Loading':'No data available'}}</td>
-                    </tr>
-                    <tr v-for="vehicle in vehicles" :key="vehicle.objectId" :class="{pointer : true, active: vehicle.objectId === vehicleID}" @click="vehicleID = vehicle.objectId">
+                    <tr v-for="vehicle in vehicles" :key="vehicle.objectId" 
+                        :class="{pointer : true, active: vehicle.objectId === vehicleID}" 
+                        @click="vehicleID = vehicle.objectId"
+                    >
                         <td>{{vehicle.plate}}</td>
                         <td class="text-right">{{typeof vehicle.speed === 'number' ? vehicle.speed + ' km/h' : 'N/A'}}</td>
                         <td class="text-right">{{getFromNow(vehicle.timestamp)}}</td>
                     </tr>
+                    <tr v-for="i in (6 - vehicles.length)" :key="i">
+                        <td class="pad"></td>
+                        <td class="pad"></td>
+                        <td class="pad"></td>
+                    </tr>
                 </table>
-                <div id="dateInput">
-                    Date: <input type="date" v-model="startTime" />
-                    <button @click="fetchVehicle" class="pointer">GO</button><span v-if="loadingVehicle"> Loading...</span>
-                    <div v-if="errorVehicles > ''"> {{errorVehicles}} </div>
+                <div id="dateInput" class="flex-end user-input">
+                    <span>Date:</span>
+                    <input type="date" class="full-width" v-model="startTime" :max="getToday()" />
+                    <button 
+                        @click="fetchVehicle" 
+                        class="pointer"
+                        :disabled="apiKey === '' || !vehicleID"
+                    >GO</button>
                 </div>
                 <table id="data" class="full-width">
                     <tr v-for="fieldName in overViewFields.fieldsToShow" :key="fieldName">
                         <td>{{overViewFields[fieldName].label}}</td>
                         <td>{{overViewFields[fieldName].value}} {{overViewFields[fieldName].unitLabel}}</td>
                     </tr>
+                    <tr v-for="i in 2" :key="i">
+                        <td class="pad"></td>
+                        <td class="pad"></td>
+                    </tr>
                 </table>
             </div>
-            <div id="map">
-
+            
+            <div id="mapContainer">
+                <div id="map"></div>
+                <div id="mapOverlay" :style="{ 'opacity': message > '' ? 100 : 0 }"><span>{{message}}</span></div>
             </div>
         </div>   
     </div>
@@ -57,13 +78,10 @@ new Vue({
   el: '#app',
   data: function(){ 
     return{
-        apiKey: 'home.assignment-699172',
+        apiKey: '',
         vehicles: [],
         daysEvents: [],
-        errorVehicles: '',
-        errorVehicle: '',
-        loadingVehicles: false,
-        loadingVehicle: false,
+        message: "Enter API key and press GO",
         vehicleID: null,
         startTime: moment().format("YYYY-MM-DD"),
         endTime: null,
@@ -114,19 +132,15 @@ new Vue({
     }
   },
   methods: {
-        selectVehicle: function(){
-
-        },
         fetchOverview: function(){
+            this.$data.message = "Loading...";
             this.$data.overViewFields.reset();
-            this.$data.errorVehicles = '';
-            this.$data.loadingVehicles = true;
             const apiUrl = `${this.$data.apiBaseUrl}/getLastData?key=${this.$data.apiKey}&json`;
-            if(this.$data.apiKey === '') return this.$data.errorVehicles = "API key is required";
             const that = this;
             fetch(apiUrl)
             .then(res => res.json())
             .then(json => {
+                that.$data.message = '';
                 that.clearVehicleMarkers();
                 that.$data.vehicles = json.response.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 that.$data.vehicles.forEach(vehicle => {
@@ -139,18 +153,17 @@ new Vue({
                     });
                     vehicle.marker.setMap(that.$data.map);
                 });
-                this.$data.loadingVehicles = false;
             }).catch(err => {
-                that.$data.errorVehicles = 'Failed to load vehicles';
                 console.log(err);
-                this.$data.loadingVehicles = false;
+                that.$data.message = 'Something went wrong :(';
             });
         },
+        getToday: function(){
+            return moment().format("YYYY-MM-DD");
+        },
         fetchVehicle: function(){
-            this.$data.loadingVehicle = true;
-            if(this.$data.startTime){
-                this.$data.endTime = moment(this.$data.startTime, "YYYY-MM-DD").add(1, 'day').format("YYYY-MM-DD");
-            } 
+            this.$data.message = "Loading...";
+            if(this.$data.startTime) this.$data.endTime = moment(this.$data.startTime, "YYYY-MM-DD").add(1, 'day').format("YYYY-MM-DD");
             const apiUrl = `${this.$data.apiBaseUrl}/getRawData?objectId=${this.$data.vehicleID}&begTimestamp=${this.$data.startTime}&endTimestamp=${this.$data.endTime}&key=${this.$data.apiKey}&json`;
             const that = this;
             this.$data.overViewFields.reset();
@@ -172,8 +185,12 @@ new Vue({
                         console.log("start:", odometer);
                         addStop(item);// we add starting position so we can calulate shortest route later
                         continue; 
+                    }
+                    const previousTime = new Date(previousItem.timestamp).getTime();
+                    const currentTime = new Date(item.timestamp).getTime();
+                    if(previousItem.EngineStatus && !item.EngineStatus){
+                        addStop(item, true); // we add stop naively when engine is turned off
                     } 
-                    if(previousItem.EngineStatus && !item.EngineStatus) addStop(item, true); // we add stop naively when engine is turned off
                     if(previousItem.Longitude !== item.Longitude || previousItem.Latitude !== item.Latitude){
                         that.$data.overViewFields.distance.path.push({ lat: item.Latitude, lng: item.Longitude});
                     }
@@ -187,11 +204,11 @@ new Vue({
                     }
                 }
                 that.createPathAndMarkers();
-                this.getShortestDistance();
-                that.$data.loadingVehicle = false;
+                that.$data.message = "";
+                that.getShortestDistance();
             }).catch(err => {
                 console.log(err);
-                that.$data.loadingVehicle = false;
+                that.$data.message = 'Something went wrong :(';
             });
         },
         getFromNow: function(date){
@@ -202,15 +219,19 @@ new Vue({
             const stops = this.$data.overViewFields.stops.positions;
             const promises = [];
 
-            if(stops.length < 2) return console.log("Not enough stops to calculate distance");
+            const origins = [...this.$data.overViewFields.stops.positions];
+            origins.pop();
+            const destinations = [...this.$data.overViewFields.stops.positions];
+            destinations.shift();
 
-            for(let i = 0; i < stops.length - 1; i++){
-                promises.push(this.getDistance(stops[i], stops[i+1]));
-            }
+            if(stops.length < 2) return this.$data.overViewFields.shortestDistance.value = "N/A";
 
-            const distances = await Promise.all(promises);
-
-            this.$data.overViewFields.shortestDistance.value = (distances.reduce((a,b) => a+b) / 1000).toFixed(2);
+            const result = await this.getDistances(origins, destinations);
+            let shortestDistanceByFollowingRoute = 0;
+            result.rows.forEach(row => {
+                shortestDistanceByFollowingRoute += row.elements[0].distance.value;
+            });
+            this.$data.overViewFields.shortestDistance.value = (shortestDistanceByFollowingRoute/ 1000).toFixed(2);
         },
         clearVehicleMarkers: function(){
             this.$data.vehicles.forEach(vehicle => {
@@ -244,23 +265,15 @@ new Vue({
                 marker.setMap(that.$data.map);
             });
         },
-        getDistance: async function(start, end){
+        getDistances: async function(start, end){
             return new Promise((resolve, reject) => {
                 let shortestDistance = -1;
                 this.$data.matrix.getDistanceMatrix({
-                    origins: [start],
-                    destinations: [end],
+                    origins: start,
+                    destinations: end,
                     travelMode: 'DRIVING',
                 }, function(data) {
-                    console.log(data)
-                    data.rows.forEach(row => {
-                        let distance = 0;
-                        row.elements.forEach(el => {
-                            distance += el.distance.value;
-                        });
-                        if(shortestDistance === -1 || distance < shortestDistance) shortestDistance = distance;
-                    });
-                    resolve(shortestDistance)
+                    resolve(data)
                 });
             });
         }

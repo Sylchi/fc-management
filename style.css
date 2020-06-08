@@ -18,13 +18,54 @@ html{
     max-width: 1200px;
     margin: 0 auto;
 }
+input[type="text"], button{
+    padding: 5px 10px;
+}
+.flex-end{
+    display: flex;
+    justify-content: flex-end;
+}
+.user-input span{
+    min-width: 70px;
+    align-self: center;
+}
+.flex-end button{
+    margin-left: 1em;
+}
+input[type="date"]{
+    padding: 3px 10px;
+}
 #tables{
     flex: 40%;
     margin-right: 1em;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+#mapContainer{
+    flex: 60%;
+    position: relative;
 }
 #map{
-    flex: 60%;
+    height: 100%;
     min-height: 500px;
+}
+#mapOverlay{
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    transition: opacity 1s ease;
+    background: white;
+    pointer-events: none;
+}
+#mapOverlay span{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
 }
 .full-width{
     width: 100%;
@@ -52,11 +93,32 @@ table, th, td{
     border-collapse: collapse;
 }
 td, th{
-    padding-top: 0.5em;
-    padding-bottom: 0.2em;
-    padding-left: 0.3em;
-    padding-right: 0.3em;
+    padding: 0.6em;
 }
 tr:nth-child(even){
     background: #eee;
+}
+.pad{
+    padding: 18px 0;
+}
+.hidden{
+    display: none;
+}
+@media screen and (max-width: 1000px) {
+    #dataVisualization{
+        flex-wrap: wrap;
+    }
+
+    #tables{
+        flex: 100%;
+        margin: 10px 0;
+    }
+
+    #map{
+        flex: 100%;
+    }
+
+    .user-input{
+        max-width: 100% !important;
+    }
 }
