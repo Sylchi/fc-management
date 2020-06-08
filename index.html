@@ -119,7 +119,6 @@ new Vue({
                     this.distance.mapPath = null;
                 }
                 if(this.stops.markers.length > 0){
-                    console.log("clearing markers")
                     this.stops.markers.forEach(marker => {
                         marker.setMap(null);
                     });
