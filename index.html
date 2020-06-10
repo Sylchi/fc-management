@@ -45,7 +45,7 @@
                 </table>
                 <div id="dateInput" class="flex-end user-input">
                     <span>Date:</span>
-                    <input type="date" class="full-width" v-model="startTime" :max="getToday()" />
+                    <input type="date" class="full-width" v-model="startTime" />
                     <button @click="fetchVehicle" class="pointer" :disabled="apiKey === '' || !vehicleID">GO</button>
                 </div>
                 <table id="data" class="full-width">
