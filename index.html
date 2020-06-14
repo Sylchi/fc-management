@@ -31,7 +31,7 @@
                     </tr>
                     <tr v-for="vehicle in vehicles" :key="vehicle.objectId"
                         :class="{pointer : true, active: vehicle.objectId === vehicleID}"
-                        @click="vehicleID = vehicle.objectId">
+                        @click="fetchVehicle(vehicle.objectId)">
                         <td>{{vehicle.plate}}</td>
                         <td class="text-right">{{typeof vehicle.speed === 'number' ? vehicle.speed + ' km/h' : 'N/A'}}
                         </td>
@@ -46,7 +46,7 @@
                 <div id="dateInput" class="flex-end user-input">
                     <span>Date:</span>
                     <input type="date" class="full-width" v-model="startTime" />
-                    <button @click="fetchVehicle" class="pointer" :disabled="apiKey === '' || !vehicleID">GO</button>
+                    <button @click="fetchVehicle(null)" class="pointer" :disabled="apiKey === '' || !vehicleID">GO</button>
                 </div>
                 <table id="data" class="full-width">
                     <tr v-for="fieldName in overViewFields.fieldsToShow" :key="fieldName">
@@ -155,16 +155,18 @@
                 getToday: function () {
                     return moment().format("YYYY-MM-DD");
                 },
-                fetchVehicle: function () {
-                    this.$data.message = "Loading...";
-                    if (this.$data.startTime) this.$data.endTime = moment(this.$data.startTime,
-                        "YYYY-MM-DD").add(1, 'day').format("YYYY-MM-DD");
-                    const apiUrl =
-                        `${this.$data.apiBaseUrl}/getRawData?objectId=${this.$data.vehicleID}&begTimestamp=${this.$data.startTime}&endTimestamp=${this.$data.endTime}&key=${this.$data.apiKey}&json`;
-                    const that = this;
-                    this.$data.overViewFields.reset();
-                    this.clearVehicleMarkers();
-                    fetch(apiUrl).then(res => res.json())
+                fetchVehicle: function (vehicleId) {
+                    if(this.$data.message != "Loading..."){
+                        if(vehicleId) this.$data.vehicleID = vehicleId;
+                        this.$data.message = "Loading...";
+                        if (this.$data.startTime) this.$data.endTime = moment(this.$data.startTime,
+                            "YYYY-MM-DD").add(1, 'day').format("YYYY-MM-DD");
+                        const apiUrl =
+                            `${this.$data.apiBaseUrl}/getRawData?objectId=${this.$data.vehicleID}&begTimestamp=${this.$data.startTime}&endTimestamp=${this.$data.endTime}&key=${this.$data.apiKey}&json`;
+                        const that = this;
+                        this.$data.overViewFields.reset();
+                        this.clearVehicleMarkers();
+                        fetch(apiUrl).then(res => res.json())
                         .then(json => {
                             let previousItem = null;
                             let odometer = null;
@@ -213,10 +215,12 @@
                             that.createPathAndMarkers();
                             that.$data.message = "";
                             that.getShortestDistance();
+                            
                         }).catch(err => {
                             console.log(err);
                             that.$data.message = 'Something went wrong :(';
                         });
+                    }
                 },
                 getFromNow: function (date) {
                     return moment(date).fromNow();
@@ -231,17 +235,20 @@
                     const destinations = [...this.$data.overViewFields.stops.positions];
                     destinations.shift();
 
-                    if (stops.length < 2) return this.$data.overViewFields.shortestDistance.value = "N/A";
+                    if (stops.length < 2) return this.$data.overViewFields.shortestDistance.value = 0;
 
-                    const result = await this.getDistances(origins, destinations);
+                    for(let i = 0; i < origins.length; i++){
+                        promises.push(this.getDistances([origins[i]], [destinations[i]]));
+                    }
 
-                    if (!result || !result.rows) return this.$data.overViewFields.shortestDistance.value =
-                        "N/A";
+                    const result = await Promise.all(promises);
 
                     let shortestDistanceByFollowingRoute = 0;
-                    result.rows.forEach(row => {
-                        shortestDistanceByFollowingRoute += row.elements[0].distance.value;
-                    });
+
+                    result.forEach(item => {
+                        shortestDistanceByFollowingRoute += item.rows[0].elements[0].distance.value;
+                    });                   
+
                     this.$data.overViewFields.shortestDistance.value = (shortestDistanceByFollowingRoute /
                         1000).toFixed(2);
                 },
@@ -284,8 +291,13 @@
                             origins: start,
                             destinations: end,
                             travelMode: 'DRIVING',
-                        }, function (data) {
-                            resolve(data)
+                        }, function (data, err) {
+                            if(data){
+                                resolve(data);
+                            }
+                            if(err){
+                                console.log(err);
+                            }
                         });
                     });
                 }
