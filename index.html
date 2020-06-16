@@ -170,6 +170,7 @@
                         .then(json => {
                             let previousItem = null;
                             let odometer = null;
+                            let distanceFromGps = 0;
 
                             const addStop = function (item, increment) {
                                 that.$data.overViewFields.stops.positions.push({
@@ -186,6 +187,9 @@
                                     addStop(
                                     item); // we add starting position so we can calulate shortest route later
                                     continue;
+                                }
+                                if(previousItem.Latitude !== item.Latitude || previousItem.Longitude !== item.Longitude){
+                                    distanceFromGps += this.getDistanceFromLatLng(previousItem.Latitude, previousItem.Longitude, item.Latitude, item.Longitude);
                                 }
                                 const previousTime = new Date(previousItem.timestamp).getTime();
                                 const currentTime = new Date(item.timestamp).getTime();
@@ -208,14 +212,13 @@
                                         that.$data.overViewFields.distance.value = (item.Distance -
                                             odometer).toFixed(2);
                                     } else {
-                                        that.$data.overViewFields.distance.value = "N/A";
+                                        that.$data.overViewFields.distance.value = distanceFromGps.toFixed(2);
                                     }
                                 }
                             }
                             that.createPathAndMarkers();
                             that.$data.message = "";
                             that.getShortestDistance();
-                            
                         }).catch(err => {
                             console.log(err);
                             that.$data.message = 'Something went wrong :(';
@@ -224,6 +227,15 @@
                 },
                 getFromNow: function (date) {
                     return moment(date).fromNow();
+                },
+                getDistanceFromLatLng: function (lat1, lon1, lat2, lon2) {  // https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
+                    const p = 0.017453292519943295;    // Math.PI / 180
+                    const c = Math.cos;
+                    const a = 0.5 - c((lat2 - lat1) * p)/2 + 
+                            c(lat1 * p) * c(lat2 * p) * 
+                            (1 - c((lon2 - lon1) * p))/2;
+
+                    return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
                 },
                 getShortestDistance: async function () {
                     const distance = -1;
@@ -294,9 +306,6 @@
                         }, function (data, err) {
                             if(data){
                                 resolve(data);
-                            }
-                            if(err){
-                                console.log(err);
                             }
                         });
                     });
